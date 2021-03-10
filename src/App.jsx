@@ -145,7 +145,7 @@ class App extends React.Component {
   }
 
   addCustomSceneObjects() {
-    loadGeometry('cropped.png', (geometry) => {
+    loadGeometry('tile.png', (geometry) => {
       loadTexture('texture.png', (material) => {
         this.cube = new THREE.Mesh(geometry, material);
         this.scene.add(this.cube);
@@ -161,9 +161,10 @@ class App extends React.Component {
     this.camera = new THREE.PerspectiveCamera(
       60, // fov = field of view
       width / height, // aspect ratio
-      0.1, // near plane
-      1000, // far plane
+      0.01, // near plane
+      100, // far plane
     );
+    this.scene.background = new THREE.Color('#010624');
     this.camera.up.set(0, 0, 1);
     this.camera.position.z = 1;
 
