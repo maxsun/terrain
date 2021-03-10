@@ -1,0 +1,27 @@
+
+@font-face {
+    font-family: 'ITC Avante Garde';
+    font-style: normal;
+    font-weight: 400;
+    src: local('ITC Avante Garde') url('./font/ITCAvantGardeStd-Bold.woff2') format('woff2'), /* Super Modern Browsers */
+         url('./font/ITCAvantGardeStd-Md.woff') format('woff'), /* Modern Browsers */
+}
+body, html {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    font-family: 'ITC Avante Garde';
+}
+
+#root {
+    width: 100%;
+    height: 100%;
+}
+
+#renderDiv {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
