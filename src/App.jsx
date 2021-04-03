@@ -50,10 +50,10 @@ function loadGeometry(url, callback) {
           const martini = new Martini(tileSize + 1);
 
           const tile = martini.createTile(terrain);
-          const mesh = tile.getMesh(0.1);
+          const mesh = tile.getMesh(0.01);
 
           const { vertices, triangles } = mesh;
-          const exag = 3.5;
+          const exag = 25;
           const numVertices = vertices.length / 2;
           const verts3d = new Float32Array(3 * numVertices);
           const uvs = new Float32Array(2 * numVertices);
@@ -70,10 +70,13 @@ function loadGeometry(url, callback) {
             verts3d[c + 1] = y / tileSize - 0.5; // y
 
             let z = terrain[y * gridSize + x];
-            if (z === 255) { // 255 is no-data value
+
+            if (z >= 255) {
+              z = 0;
+            } else if (z >= -1) { // 255 is no-data value
               z = 0;
             }
-            verts3d[c + 2] = (z / tileSize) * exag; // z
+            verts3d[c + 2] = (z / tileSize) * exag + 0.25; // z
 
             c += 3;
           }
@@ -93,13 +96,61 @@ function loadGeometry(url, callback) {
   xhr.send();
 }
 
-function loadTexture(url, callback) {
-  const textureLoader = new THREE.TextureLoader();
-  textureLoader.load('texture.png', (texture) => {
-    const material = new THREE.MeshBasicMaterial({ map: texture, wireframe: false });
+function loadTexture(lutUrl, callback) {
+  const fragmentShaderTemplate = `
+    varying vec3 vColor;
+    varying float opacity;
+    void main() {
+      if (opacity != 1.) {
+        discard;
+      }
+      gl_FragColor = vec4(vColor, opacity);
+    }
+  `;
+  const vertexShaderTemplate = `
+    vec4 deepCM[256];
+    int t;
+    varying vec3 vColor;
+    varying float opacity;
+    float h;
+    void main() {
+
+      h = pow(abs(position.z - 0.25) * 5., 3.0) * 255.0;
+      t = int(floor(h)) + 5;
+      if (position.z >= 0.25) {
+        vColor = vec3(.2, .2, 1.);
+        opacity = 0.;
+      } else {
+        opacity = 1.;
+        %LUTCODE%
+      }
+
+      vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * modelViewPosition;
+  }`;
+
+  fetch(lutUrl).then((resp) => resp.text()).then((lutText) => {
+    let lutCode = '';
+    lutText.split('\n').slice(1).forEach((line) => {
+      if (line.trim() !== '') {
+        const components = line.split('\t');
+        const i = Number.parseInt(components[0], 10);
+        const r = Number.parseFloat(components[1]);
+        const g = Number.parseFloat(components[2]);
+        const b = Number.parseFloat(components[3]);
+        lutCode += `if (t == ${255 - i}) vColor = vec3(${r / 255}, ${g / 255}, ${b / 255});\n`;
+      }
+    });
+    console.log(lutCode);
+    const material = new THREE.ShaderMaterial({
+      wireframe: false,
+      alphaTest: 0.9,
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide,
+      fragmentShader: fragmentShaderTemplate,
+      vertexShader: vertexShaderTemplate.replace('%LUTCODE%', lutCode),
+    });
     callback(material);
-  }, undefined, (err) => {
-    console.error('texture not loaded', err);
   });
 }
 
@@ -145,8 +196,8 @@ class App extends React.Component {
   }
 
   addCustomSceneObjects() {
-    loadGeometry('tile.png', (geometry) => {
-      loadTexture('texture.png', (material) => {
+    loadGeometry('rgb.png', (geometry) => {
+      loadTexture('Deep.lut', (material) => {
         this.cube = new THREE.Mesh(geometry, material);
         this.scene.add(this.cube);
       });
@@ -162,7 +213,7 @@ class App extends React.Component {
       60, // fov = field of view
       width / height, // aspect ratio
       0.01, // near plane
-      100, // far plane
+      10, // far plane
     );
     this.scene.background = new THREE.Color('#010624');
     this.camera.up.set(0, 0, 1);
@@ -176,14 +227,17 @@ class App extends React.Component {
 
     // an animation loop is required when either damping or auto-rotation are enabled
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
+    // this.controls.dampingFactor = 0;
 
-    this.controls.screenSpacePanning = false;
+    // this.controls.screenSpacePanning = false;
 
-    this.controls.minDistance = 0.1;
+    this.controls.target = new THREE.Vector3(0, 0, 0);
+    this.controls.minDistance = 0;
     this.controls.maxDistance = 3;
 
-    this.controls.maxPolarAngle = Math.PI / 2;
+    // this.controls.maxPolarAngle = Math.PI / 2;
+    // const ambientLight = new THREE.AmbientLight(0x222222);
+    // this.scene.add(ambientLight);
   }
 
   render() {
